@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 import requests
 import os
+import sys
 import time
 import subprocess
 from bs4 import BeautifulSoup
@@ -19,14 +20,15 @@ COLORRESET = "\033[0m"
 
 class ExecuteTestCases:
 
-    def __init__(self, testcases):
+    def __init__(self, testcases, test_name):
+        self.test_name = test_name
         self.testinfo = testcases[0]
         self.testCases = testcases[1:]
         self.result = {}
         self.result["build"] = 0
-        self.result["result"] = {"AC":0, "WA":0, "TLE":0}
+        self.result["result"] = {"AC": 0, "WA": 0, "TLE": 0}
 
-    def Execute(self, srcpath = ""):
+    def Execute(self, srcpath=""):
         """テストを実行"""
 
         print(YELLOW + "Judging " + self.testinfo["contest"] + "/" + self.testinfo["testname"] + "..." + COLORRESET)
@@ -42,7 +44,7 @@ class ExecuteTestCases:
         未指定時にソースコードの場所を取得
         設定ファイル(CONF_FILE)記載の相対パス/コンテスト名/テスト名.cppを返す
         """
-        codepath = os.path.join(self.testinfo["contest"], self.testinfo["testname"] + ".cpp")
+        codepath = os.path.join(self.test_name + ".cpp")
         workpath = "."
         with open(CONF_FILE, "r") as f:
             while True:
@@ -61,7 +63,7 @@ class ExecuteTestCases:
         """
         print(RED, end="")
         if (os.path.exists(srcpath) == True):
-            cmd = 'g++ -o tmp ' + srcpath
+            cmd = 'g++ -std=c++14 -o tmp ' + srcpath
             if (subprocess.run(cmd, shell = True).returncode == 0):
                 self.result["build"] = 0
             else:
@@ -111,20 +113,18 @@ class ExecuteTestCases:
         全て正解=> AC, 実行時間オーバー=> TLE, 誤りを含む=> WA, コンパイルエラー=> CE
         """
 
-
-        if (self.result["build"] == 2):
+        if self.result["build"] == 2:
             print(RED, end="")
             print("src file is not found")
             print("please write exact path on " + CONF_FILE + " or specify path(-p)")
             print(COLORRESET, end="")
             return
 
-
-        if (self.result["build"] == 1):
+        if self.result["build"] == 1:
             RESULT = YELLOW + "CE" + COLORRESET
-        elif (self.result["result"]["AC"] == len(self.testCases)):
+        elif self.result["result"]["AC"] == len(self.testCases):
             RESULT = GREEN + "AC" + COLORRESET
-        elif (self.result["result"]["TLE"] >= 1):
+        elif self.result["result"]["TLE"] >= 1:
             RESULT = YELLOW + "TLE" + COLORRESET
         else: 
             RESULT = YELLOW + "WA" + COLORRESET
@@ -137,8 +137,9 @@ class ManageTestCases:
         os.makedirs(TESTCASES_PATH, exist_ok=True)
         self.config = {}
         self.contest = contest_name
+        self.__update_conf()
         
-    def __UpdateConf(self):
+    def __update_conf(self):
         try:        
             with open(CONF_FILE, "r") as f:
                 while True:
@@ -150,27 +151,31 @@ class ManageTestCases:
         except:
             print("cannot open config file.")
 
-    def GetTestCases(self, test_name, islogin = False):
-        """指定された問題名からテストケースを取得しリストを返す"""
-
-        self.__UpdateConf()
+    def get_test_cases(self, test_name, is_login=False):
         file_name = self.contest + "@" + test_name + ".txt"
-        testinfo = [{"contest":self.contest, "testname":test_name}]
-        # サーバ負荷低減のため同一情報の取得はスクレイピングさせない
+        test_info = [{"contest": self.contest, "testname": test_name}]
         if file_name in os.listdir(TESTCASES_PATH):
-            testcases = self.__ReadFile(file_name)
+            test_cases = self.__ReadFile(file_name)
         else:
-            testcases = self.__ScrapePage(test_name, islogin)
-            self.__WriteFile(file_name, testcases)
-        return testinfo + testcases
+            test_cases = self.__ScrapePage(test_name, is_login)
+            self.__WriteFile(file_name, test_cases)
+        return test_info + test_cases
+
+    def __fetch_test_cases(self, test_name, is_login=False):
+        file_name = self.contest + "@" + test_name + ".txt"
+        test_cases = self.__ScrapePage(test_name, is_login)
+        self.__WriteFile(file_name, test_cases)
+
+    def fetch_all_test(self):
+        # test of A to F
+        for test in ["a", "b", "c", "d", "e", "f"]:
+            self.__fetch_test_cases(self.contest + "_" + test)
 
     def __ReadFile(self, file_name):
-        """ファイルを読む"""
-
         testcases = []
         targ_path = os.path.join(TESTCASES_PATH, file_name)
         with open(targ_path, "r") as f:
-            while(1):
+            while True:
                 st = f.readline().rstrip('\r\n')
                 if 'test case' in st:
                     testcase = {}
@@ -191,11 +196,10 @@ class ManageTestCases:
                 testcase[mode] += st + "\n"
         return testcases
 
-    def __WriteFile(self, file_name, testcases):
-        """ファイルを書く"""
-        targ_path = os.path.join(TESTCASES_PATH, file_name)
-        with open(targ_path, "w") as f:
-            for i, q in enumerate(testcases):
+    def __WriteFile(self, file_name, test_cases):
+        target_path = os.path.join(TESTCASES_PATH, file_name)
+        with open(target_path, "w") as f:
+            for i, q in enumerate(test_cases):
                 f.write("[test case " + str(i) + "]\n")
                 f.write("---input---\n")
                 f.write(q["input"])
@@ -203,10 +207,9 @@ class ManageTestCases:
                 f.write(q["output"])
                 f.write("---fin---\n")
                 
-    def __ScrapePage(self, test_name, islogin):
+    def __ScrapePage(self, test_name, is_login):
         session = requests.session()
-        if islogin == True:
-            # loginに必要な認証情報を取得
+        if is_login:
             self.__LoginPage(session)
  
         pageAll = session.get(CONTEST_URL + str(self.contest) + "/tasks/" + str(test_name))
@@ -251,18 +254,16 @@ if __name__ == "__main__":
 
     parser = argparse.ArgumentParser()
 
-    parser.add_argument("contest_name", help = "set contest name(ex. abc143)", type = str)
-    parser.add_argument("question", help = "set question name(ex. abc143_a)", type = str)
-    parser.add_argument("-p", "--path", help = "set path of source code", type = str)
-    parser.add_argument("-a", "--addtest", help = "add testcase", action="store_true")
-    parser.add_argument("-i", "--init", help = "set configuration", action ="store_true")
-    args = parser.parse_args()
-
-    ac = ManageTestCases(args.contest_name)
-
-    testcases = ac.GetTestCases(args.question, True)
-    ex = ExecuteTestCases(testcases)
-    if (args.path != None):
-        ex.Execute(args.path)
-    else:
+    parser.add_argument("contest_name", help="set contest name(ex. abc143)", type=str)
+    if len(sys.argv) == 2:
+        # initialize all problems test
+        args = parser.parse_args()
+        ac = ManageTestCases(args.contest_name)
+        ac.fetch_all_test()
+    if len(sys.argv) == 3:
+        parser.add_argument("problem_name", help="set problem name(ex. a)", type=str)
+        args = parser.parse_args()
+        ac = ManageTestCases(args.contest_name)
+        testcases = ac.get_test_cases(args.contest_name+"_"+args.problem_name, True)
+        ex = ExecuteTestCases(testcases, args.problem_name)
         ex.Execute()
