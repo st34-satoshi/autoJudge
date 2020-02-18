@@ -1,9 +1,8 @@
 # -*- coding: utf-8 -*-
 import requests
-import os, sys
+import os
 import time
 import subprocess
-import select
 from bs4 import BeautifulSoup
 
 LOGIN_URL = 'https://atcoder.jp/login?continue=https%3A%2F%2Fatcoder.jp%2Fcontests%2F'
@@ -17,9 +16,8 @@ GREEN = "\033[32m"
 YELLOW = "\033[33m"
 COLORRESET = "\033[0m"
 
-class ExecuteTestCases:
-    """テストケースの実行"""
 
+class ExecuteTestCases:
 
     def __init__(self, testcases):
         self.testinfo = testcases[0]
@@ -132,29 +130,14 @@ class ExecuteTestCases:
             RESULT = YELLOW + "WA" + COLORRESET
         print("result: " + RESULT)
 
+
 class ManageTestCases:
-    """テストケースの管理"""
 
     def __init__(self, contest_name):
         os.makedirs(TESTCASES_PATH, exist_ok=True)
         self.config = {}
         self.contest = contest_name
         
-    def RegisterUser(self):
-        """user設定(初回)"""
-
-        print("Atcoder Username:", end="")
-        username = input().rstrip('\r\n')
-        print("Atcoder Password:", end="")
-        password = input().rstrip('\r\n')
-        print("Src Directory(Ex. ./aaa/abc140/abc140.cpp => input \"./aaa\"):", end="")
-        srcpath = input().rstrip('\r\n')
-
-        with open(CONF_FILE, "w") as f:
-            f.write("username:" + username + "\n")
-            f.write("password:" + password + "\n")
-            f.write("srcpath:" + srcpath + "\n")
-
     def __UpdateConf(self):
         try:        
             with open(CONF_FILE, "r") as f:
@@ -180,33 +163,6 @@ class ManageTestCases:
             testcases = self.__ScrapePage(test_name, islogin)
             self.__WriteFile(file_name, testcases)
         return testinfo + testcases
-
-    def AddTestCases(self, test_name):
-        """取得したテストケースに独自のテストケースを追加する"""
-
-        self.__UpdateConf()
-        testcase = {}
-        print("type test input(exit by \"quit\")")
-        testcase["input"] = ""
-        while(1):
-            line = input()
-            if (line == "quit"):
-                break;
-            testcase["input"] += line + "\n"
-
-        print("type test output(exit by \"quit\")")
-        testcase["output"] = ""
-        while(1):
-            line = input()
-            if (line == "quit"):
-                break;
-            testcase["output"] += line + "\n"
-            
-        file_name = self.contest + "@" + test_name + ".txt"
-        if file_name in os.listdir(TESTCASES_PATH):
-            testcases = self.__ReadFile(file_name)
-        testcases.append(testcase)
-        self.__WriteFile(file_name, testcases)
 
     def __ReadFile(self, file_name):
         """ファイルを読む"""
@@ -303,13 +259,6 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     ac = ManageTestCases(args.contest_name)
-
-    if (args.init == True):
-        ac.RegisterUser()
-
-    if (args.addtest == True):
-        ac.AddTestCases(args.question)
-        exit()
 
     testcases = ac.GetTestCases(args.question, True)
     ex = ExecuteTestCases(testcases)
